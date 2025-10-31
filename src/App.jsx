@@ -28,7 +28,7 @@ function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0f1419' }}>
       {!isAuthenticated ? (
         <Login onLogin={handleLogin} />
       ) : (
