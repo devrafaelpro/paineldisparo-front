@@ -6,15 +6,19 @@ const Painel = ({ token, onLogout }) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [countdown, setCountdown] = useState(null)
   const [progress, setProgress] = useState({
     total: 0,
     sent: 0,
     campaignName: '',
     status: 'idle',
-    leads: []
+    leads: [],
+    tempoParaEnvio: null,
+    timestampRecebido: null
   })
 
   const eventSourceRef = useRef(null)
+  const countdownIntervalRef = useRef(null)
   const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
   // Busca estado atual ao montar o componente
@@ -65,6 +69,44 @@ const Painel = ({ token, onLogout }) => {
       }
     }
   }, [token, BACKEND_URL])
+
+  // Countdown timer
+  useEffect(() => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current)
+    }
+
+    if (progress.tempoParaEnvio && progress.timestampRecebido && progress.status === 'running') {
+      const updateCountdown = () => {
+        const elapsed = Math.floor((Date.now() - progress.timestampRecebido) / 1000)
+        const remaining = progress.tempoParaEnvio - elapsed
+
+        if (remaining <= 0) {
+          setCountdown(null)
+        } else {
+          setCountdown(remaining)
+        }
+      }
+
+      updateCountdown()
+      countdownIntervalRef.current = setInterval(updateCountdown, 1000)
+    } else {
+      setCountdown(null)
+    }
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+      }
+    }
+  }, [progress.tempoParaEnvio, progress.timestampRecebido, progress.status])
+
+  const formatCountdown = (seconds) => {
+    if (!seconds || seconds <= 0) return null
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
 
   const parseLeads = (text) => {
     const lines = text.trim().split('\n')
@@ -233,157 +275,115 @@ const Painel = ({ token, onLogout }) => {
     document.body.removeChild(link)
   }
 
-  const getStatusText = (status) => {
-    const statusMap = {
-      idle: 'Aguardando',
-      running: 'Em Execução',
-      stopped: 'Parado',
-      done: 'Concluído'
+  const getStatusBadge = (status) => {
+    const styles = {
+      idle: { bg: '#374151', text: '#9ca3af', label: 'Aguardando' },
+      running: { bg: '#1e40af', text: '#93c5fd', label: 'Em Execução' },
+      stopped: { bg: '#ea580c', text: '#fdba74', label: 'Parado' },
+      done: { bg: '#059669', text: '#6ee7b7', label: 'Concluído' }
     }
-    return statusMap[status] || status
+    const style = styles[status] || styles.idle
+    return (
+      <span style={{
+        padding: '4px 12px',
+        borderRadius: '6px',
+        backgroundColor: style.bg,
+        color: style.text,
+        fontSize: '13px',
+        fontWeight: '500'
+      }}>
+        {style.label}
+      </span>
+    )
   }
 
-  const getStatusColor = (status) => {
-    const colorMap = {
-      idle: '#9e9e9e',
-      running: '#00bcd4',
-      stopped: '#ff9800',
-      done: '#4caf50'
+  const getLeadStatusBadge = (status) => {
+    const styles = {
+      success: { bg: '#059669', text: '#fff', label: 'Enviado' },
+      error: { bg: '#dc2626', text: '#fff', label: 'Erro' },
+      pending: { bg: '#ea580c', text: '#fff', label: 'Pendente' },
+      not_sent: { bg: '#6b7280', text: '#fff', label: 'Não Enviado' }
     }
-    return colorMap[status] || '#9e9e9e'
+    const style = styles[status] || styles.pending
+    return (
+      <span style={{
+        padding: '4px 10px',
+        borderRadius: '4px',
+        backgroundColor: style.bg,
+        color: style.text,
+        fontSize: '12px',
+        fontWeight: '500'
+      }}>
+        {style.label}
+      </span>
+    )
   }
 
-  const getLeadStatusColor = (status) => {
-    const colorMap = {
-      success: '#4caf50',
-      error: '#f44336',
-      pending: '#ff9800',
-      not_sent: '#616161'
-    }
-    return colorMap[status] || '#616161'
-  }
-
-  const getLeadStatusText = (status) => {
-    const statusMap = {
-      success: 'Enviado',
-      error: 'Erro',
-      pending: 'Pendente',
-      not_sent: 'Não Enviado'
-    }
-    return statusMap[status] || 'Desconhecido'
-  }
-
-  const percentage = progress.total > 0 
-    ? Math.round((progress.sent / progress.total) * 100) 
-    : 0
-
+  const percentage = progress.total > 0 ? Math.round((progress.sent / progress.total) * 100) : 0
   const leadsEnviados = progress.leads?.filter(l => l.status === 'success').length || 0
   const leadsErro = progress.leads?.filter(l => l.status === 'error').length || 0
   const leadsPendentes = progress.leads?.filter(l => l.status === 'pending' || l.status === 'not_sent').length || 0
-
   const showLeadsView = progress.status !== 'idle' && progress.leads && progress.leads.length > 0
 
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#0f1419',
-      backgroundImage: 'linear-gradient(135deg, #0f1419 0%, #1a2332 100%)',
-      color: '#e0e0e0',
-      padding: '20px'
+      backgroundColor: '#0f172a',
+      color: '#e2e8f0',
+      padding: '24px'
     }}>
-      <div style={{
-        maxWidth: '1600px',
-        margin: '0 auto'
-      }}>
-        {/* Header com Logo */}
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '30px',
-          backgroundColor: '#1a2332',
-          padding: '20px 30px',
-          borderRadius: '12px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-          border: '1px solid rgba(255,255,255,0.1)'
+          marginBottom: '32px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <img 
-              src="/fluxione-logo.png" 
-              alt="Fluxione Logo" 
-              style={{
-                height: '50px',
-                width: 'auto'
-              }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <img src="/fluxione-logo.png" alt="Logo" style={{ height: '40px' }} />
             <div>
-              <h1 style={{ 
-                margin: 0, 
-                color: '#ffffff',
-                fontSize: '24px',
-                fontWeight: '600'
-              }}>
+              <h1 style={{ margin: 0, fontSize: '24px', fontWeight: '600', color: '#f1f5f9' }}>
                 Painel de Disparo
               </h1>
-              <div style={{
-                fontSize: '14px',
-                color: '#9e9e9e',
-                marginTop: '4px'
-              }}>
+              <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#64748b' }}>
                 Sistema de Gestão de Campanhas
-              </div>
+              </p>
             </div>
           </div>
           <button
             onClick={onLogout}
             style={{
-              padding: '10px 24px',
-              backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
+              padding: '8px 16px',
+              backgroundColor: '#1e293b',
+              color: '#e2e8f0',
+              border: '1px solid #334155',
+              borderRadius: '6px',
               cursor: 'pointer',
-              fontWeight: '500',
               fontSize: '14px',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 2px 8px rgba(244, 67, 54, 0.3)'
+              fontWeight: '500'
             }}
-            onMouseOver={(e) => e.target.style.backgroundColor = '#d32f2f'}
-            onMouseOut={(e) => e.target.style.backgroundColor = '#f44336'}
           >
             Sair
           </button>
         </div>
 
         {!showLeadsView ? (
-          /* Formulário de Nova Campanha */
+          /* Formulário */
           <div style={{
-            backgroundColor: '#1a2332',
-            padding: '40px',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            maxWidth: '900px',
-            margin: '0 auto'
+            maxWidth: '800px',
+            margin: '0 auto',
+            backgroundColor: '#1e293b',
+            border: '1px solid #334155',
+            borderRadius: '8px',
+            padding: '32px'
           }}>
-            <h2 style={{
-              marginTop: 0,
-              marginBottom: '30px',
-              color: '#ffffff',
-              fontSize: '28px',
-              fontWeight: '600'
-            }}>
+            <h2 style={{ margin: '0 0 24px 0', fontSize: '20px', fontWeight: '600', color: '#f1f5f9' }}>
               Nova Campanha
             </h2>
 
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '10px',
-                color: '#b0b0b0',
-                fontWeight: '500',
-                fontSize: '14px'
-              }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#cbd5e1' }}>
                 Nome da Campanha
               </label>
               <input
@@ -394,518 +394,277 @@ const Painel = ({ token, onLogout }) => {
                 disabled={isSending}
                 style={{
                   width: '100%',
-                  padding: '14px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  boxSizing: 'border-box',
-                  backgroundColor: '#0f1419',
-                  color: '#ffffff',
-                  opacity: isSending ? 0.6 : 1,
-                  transition: 'all 0.3s ease'
+                  padding: '10px 14px',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: '6px',
+                  color: '#e2e8f0',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#00bcd4'}
-                onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
               />
             </div>
 
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '10px',
-                color: '#b0b0b0',
-                fontWeight: '500',
-                fontSize: '14px'
-              }}>
-                Leads (formato: nome,telefone - um por linha)
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#cbd5e1' }}>
+                Leads (nome,telefone)
               </label>
               <textarea
                 value={leadsText}
                 onChange={(e) => setLeadsText(e.target.value)}
                 placeholder="João,5511999999999&#10;Maria,5511933334444"
-                rows={15}
+                rows={12}
                 disabled={isSending}
                 style={{
                   width: '100%',
-                  padding: '14px',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '8px',
-                  fontSize: '14px',
+                  padding: '10px 14px',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #334155',
+                  borderRadius: '6px',
+                  color: '#e2e8f0',
+                  fontSize: '13px',
                   fontFamily: 'monospace',
                   boxSizing: 'border-box',
-                  resize: 'vertical',
-                  backgroundColor: '#0f1419',
-                  color: '#ffffff',
-                  opacity: isSending ? 0.6 : 1,
-                  transition: 'all 0.3s ease'
+                  resize: 'vertical'
                 }}
-                onFocus={(e) => e.target.style.borderColor = '#00bcd4'}
-                onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
               />
             </div>
 
             {error && (
               <div style={{
-                color: '#ff5252',
-                marginBottom: '24px',
-                padding: '14px',
-                backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                borderRadius: '8px',
-                border: '1px solid rgba(244, 67, 54, 0.3)'
+                marginBottom: '20px',
+                padding: '12px',
+                backgroundColor: '#7f1d1d',
+                border: '1px solid #991b1b',
+                borderRadius: '6px',
+                color: '#fca5a5',
+                fontSize: '14px'
               }}>
                 {error}
               </div>
             )}
 
-            <div style={{
-              display: 'flex',
-              gap: '12px'
-            }}>
-              <button
-                onClick={handleIniciarDisparo}
-                disabled={loading || isSending}
-                style={{
-                  flex: 1,
-                  padding: '16px',
-                  backgroundColor: isSending ? '#4caf50' : '#00bcd4',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  cursor: (loading || isSending) ? 'not-allowed' : 'pointer',
-                  opacity: (loading || isSending) ? 0.7 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: isSending ? '0 4px 12px rgba(76, 175, 80, 0.3)' : '0 4px 12px rgba(0, 188, 212, 0.3)'
-                }}
-                onMouseOver={(e) => {
-                  if (!loading && !isSending) e.target.style.transform = 'translateY(-2px)'
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.transform = 'translateY(0)'
-                }}
-              >
-                {loading ? '⏳ Enviando...' : isSending ? '⏸️ Aguardando...' : '▶️ Iniciar Disparo'}
-              </button>
-            </div>
+            <button
+              onClick={handleIniciarDisparo}
+              disabled={loading || isSending}
+              style={{
+                width: '100%',
+                padding: '12px',
+                backgroundColor: '#1e40af',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: (loading || isSending) ? 'not-allowed' : 'pointer',
+                opacity: (loading || isSending) ? 0.5 : 1
+              }}
+            >
+              {loading ? 'Iniciando...' : isSending ? 'Aguardando...' : 'Iniciar Disparo'}
+            </button>
           </div>
         ) : (
-          /* Tela de Acompanhamento */
+          /* Acompanhamento */
           <div>
             {/* Header da Campanha */}
             <div style={{
-              backgroundColor: '#1a2332',
-              padding: '30px',
-              borderRadius: '12px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: '8px',
+              padding: '24px',
               marginBottom: '24px'
             }}>
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '24px',
-                flexWrap: 'wrap',
-                gap: '16px'
+                alignItems: 'flex-start',
+                marginBottom: '24px'
               }}>
                 <div>
-                  <h2 style={{ 
-                    margin: 0, 
-                    color: '#ffffff',
-                    fontSize: '28px',
-                    fontWeight: '600'
-                  }}>
-                    {progress.campaignName || 'Campanha'}
+                  <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '600', color: '#f1f5f9' }}>
+                    {progress.campaignName}
                   </h2>
-                  <div style={{
-                    marginTop: '10px',
-                    fontSize: '14px',
-                    color: '#9e9e9e',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    Status: 
-                    <span style={{ 
-                      color: getStatusColor(progress.status),
-                      fontWeight: '600',
-                      fontSize: '16px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {getStatusBadge(progress.status)}
+                    {countdown && progress.status === 'running' && (
                       <span style={{
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        backgroundColor: getStatusColor(progress.status),
-                        display: 'inline-block',
-                        boxShadow: `0 0 10px ${getStatusColor(progress.status)}`
-                      }}></span>
-                      {getStatusText(progress.status)}
-                    </span>
+                        fontSize: '13px',
+                        color: '#94a3b8',
+                        fontFamily: 'monospace',
+                        padding: '4px 12px',
+                        backgroundColor: '#0f172a',
+                        borderRadius: '6px',
+                        border: '1px solid #334155'
+                      }}>
+                        Enviando em: {formatCountdown(countdown)}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   {(progress.status === 'running' || progress.status === 'stopped') && (
                     <button
                       onClick={handleStop}
                       disabled={progress.status !== 'running'}
                       style={{
-                        padding: '12px 24px',
-                        backgroundColor: progress.status === 'running' ? '#ff9800' : '#616161',
-                        color: 'white',
+                        padding: '8px 16px',
+                        backgroundColor: progress.status === 'running' ? '#ea580c' : '#374151',
+                        color: '#fff',
                         border: 'none',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontWeight: '500',
                         cursor: progress.status === 'running' ? 'pointer' : 'not-allowed',
-                        fontWeight: '600',
-                        fontSize: '14px',
-                        opacity: progress.status === 'running' ? 1 : 0.6,
-                        transition: 'all 0.3s ease',
-                        boxShadow: progress.status === 'running' ? '0 4px 12px rgba(255, 152, 0, 0.3)' : 'none'
-                      }}
-                      onMouseOver={(e) => {
-                        if (progress.status === 'running') {
-                          e.target.style.transform = 'translateY(-2px)'
-                          e.target.style.boxShadow = '0 6px 16px rgba(255, 152, 0, 0.4)'
-                        }
-                      }}
-                      onMouseOut={(e) => {
-                        e.target.style.transform = 'translateY(0)'
-                        e.target.style.boxShadow = progress.status === 'running' ? '0 4px 12px rgba(255, 152, 0, 0.3)' : 'none'
+                        opacity: progress.status === 'running' ? 1 : 0.5
                       }}
                     >
-                      ⏹️ Parar
+                      Parar
                     </button>
                   )}
                   <button
                     onClick={handleReset}
                     disabled={progress.status === 'running'}
                     style={{
-                      padding: '12px 24px',
-                      backgroundColor: progress.status === 'running' ? '#616161' : '#00bcd4',
-                      color: 'white',
+                      padding: '8px 16px',
+                      backgroundColor: progress.status === 'running' ? '#374151' : '#1e40af',
+                      color: '#fff',
                       border: 'none',
-                      borderRadius: '8px',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: '500',
                       cursor: progress.status === 'running' ? 'not-allowed' : 'pointer',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      opacity: progress.status === 'running' ? 0.6 : 1,
-                      transition: 'all 0.3s ease',
-                      boxShadow: progress.status === 'running' ? 'none' : '0 4px 12px rgba(0, 188, 212, 0.3)'
-                    }}
-                    onMouseOver={(e) => {
-                      if (progress.status !== 'running') {
-                        e.target.style.transform = 'translateY(-2px)'
-                        e.target.style.boxShadow = '0 6px 16px rgba(0, 188, 212, 0.4)'
-                      }
-                    }}
-                    onMouseOut={(e) => {
-                      e.target.style.transform = 'translateY(0)'
-                      e.target.style.boxShadow = progress.status === 'running' ? 'none' : '0 4px 12px rgba(0, 188, 212, 0.3)'
+                      opacity: progress.status === 'running' ? 0.5 : 1
                     }}
                   >
-                    ✨ Nova Campanha
+                    Nova Campanha
                   </button>
                 </div>
               </div>
 
-              {/* Estatísticas */}
+              {/* Stats */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: '16px',
-                marginBottom: '24px'
+                marginBottom: '20px'
               }}>
-                <div style={{
-                  padding: '20px',
-                  backgroundColor: '#0f1419',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(0, 188, 212, 0.3)',
-                  boxShadow: '0 4px 12px rgba(0, 188, 212, 0.1)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#00bcd4' }}>
-                    {progress.sent} / {progress.total}
+                {[
+                  { label: 'Total', value: `${progress.sent}/${progress.total}`, color: '#64748b' },
+                  { label: 'Sucesso', value: leadsEnviados, color: '#059669' },
+                  { label: 'Erros', value: leadsErro, color: '#dc2626' },
+                  { label: 'Pendentes', value: leadsPendentes, color: '#ea580c' }
+                ].map((stat, idx) => (
+                  <div key={idx} style={{
+                    padding: '16px',
+                    backgroundColor: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: '6px'
+                  }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: stat.color, marginBottom: '4px' }}>
+                      {stat.value}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      {stat.label}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#9e9e9e', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    Enviados
-                  </div>
-                </div>
-                <div style={{
-                  padding: '20px',
-                  backgroundColor: '#0f1419',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(76, 175, 80, 0.3)',
-                  boxShadow: '0 4px 12px rgba(76, 175, 80, 0.1)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#4caf50' }}>
-                    {leadsEnviados}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#9e9e9e', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    Sucesso
-                  </div>
-                </div>
-                <div style={{
-                  padding: '20px',
-                  backgroundColor: '#0f1419',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(244, 67, 54, 0.3)',
-                  boxShadow: '0 4px 12px rgba(244, 67, 54, 0.1)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#f44336' }}>
-                    {leadsErro}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#9e9e9e', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    Erros
-                  </div>
-                </div>
-                <div style={{
-                  padding: '20px',
-                  backgroundColor: '#0f1419',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(255, 152, 0, 0.3)',
-                  boxShadow: '0 4px 12px rgba(255, 152, 0, 0.1)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#ff9800' }}>
-                    {leadsPendentes}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#9e9e9e', marginTop: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                    Pendentes
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* Barra de Progresso */}
+              {/* Progress Bar */}
               {progress.total > 0 && (
-                <div style={{ marginBottom: '24px' }}>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '10px'
-                  }}>
-                    <div style={{
-                      fontSize: '14px',
-                      color: '#b0b0b0',
-                      fontWeight: '500'
-                    }}>
-                      Progresso
-                    </div>
-                    <div style={{
-                      fontSize: '16px',
-                      color: '#ffffff',
-                      fontWeight: '600'
-                    }}>
-                      {percentage}%
-                    </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#94a3b8' }}>Progresso</span>
+                    <span style={{ fontSize: '13px', color: '#cbd5e1', fontWeight: '600' }}>{percentage}%</span>
                   </div>
                   <div style={{
                     width: '100%',
-                    height: '40px',
-                    backgroundColor: '#0f1419',
-                    borderRadius: '20px',
-                    overflow: 'hidden',
-                    position: 'relative',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.3)'
+                    height: '8px',
+                    backgroundColor: '#0f172a',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
                   }}>
                     <div style={{
                       width: `${percentage}%`,
                       height: '100%',
-                      background: 'linear-gradient(90deg, #00bcd4 0%, #4caf50 100%)',
-                      transition: 'width 0.5s ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      boxShadow: '0 0 20px rgba(0, 188, 212, 0.5)'
-                    }}>
-                      {percentage > 8 && `${percentage}%`}
-                    </div>
+                      backgroundColor: '#1e40af',
+                      transition: 'width 0.3s ease'
+                    }} />
                   </div>
                 </div>
               )}
 
-              {/* Botões de Download */}
-              <div style={{
-                display: 'flex',
-                gap: '12px',
-                marginTop: '24px'
-              }}>
+              {/* Download Buttons */}
+              <div style={{ display: 'flex', gap: '12px' }}>
                 <button
                   onClick={() => downloadPlanilha(true)}
                   style={{
                     flex: 1,
-                    padding: '14px',
-                    backgroundColor: '#4caf50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    fontSize: '14px',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)'
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.transform = 'translateY(-2px)'
-                    e.target.style.boxShadow = '0 6px 16px rgba(76, 175, 80, 0.4)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.transform = 'translateY(0)'
-                    e.target.style.boxShadow = '0 4px 12px rgba(76, 175, 80, 0.3)'
+                    padding: '10px',
+                    backgroundColor: '#0f172a',
+                    color: '#e2e8f0',
+                    border: '1px solid #334155',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
                   }}
                 >
-                  📥 Baixar Planilha Completa
+                  Baixar Todos
                 </button>
                 <button
                   onClick={() => downloadPlanilha(false)}
                   style={{
                     flex: 1,
-                    padding: '14px',
-                    backgroundColor: '#ff9800',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    fontSize: '14px',
-                    transition: 'all 0.3s ease',
-                    boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)'
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.transform = 'translateY(-2px)'
-                    e.target.style.boxShadow = '0 6px 16px rgba(255, 152, 0, 0.4)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.transform = 'translateY(0)'
-                    e.target.style.boxShadow = '0 4px 12px rgba(255, 152, 0, 0.3)'
+                    padding: '10px',
+                    backgroundColor: '#0f172a',
+                    color: '#e2e8f0',
+                    border: '1px solid #334155',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
                   }}
                 >
-                  📥 Baixar Não Enviados
+                  Baixar Não Enviados
                 </button>
               </div>
             </div>
 
             {/* Lista de Leads */}
             <div style={{
-              backgroundColor: '#1a2332',
-              padding: '30px',
-              borderRadius: '12px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-              border: '1px solid rgba(255,255,255,0.1)'
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              borderRadius: '8px',
+              overflow: 'hidden'
             }}>
-              <h3 style={{ 
-                marginTop: 0, 
-                marginBottom: '24px', 
-                color: '#ffffff',
-                fontSize: '22px',
-                fontWeight: '600'
-              }}>
-                Leads ({progress.leads?.length || 0})
-              </h3>
-              <div style={{
-                maxHeight: '600px',
-                overflowY: 'auto',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                backgroundColor: '#0f1419'
-              }}>
+              <div style={{ padding: '20px', borderBottom: '1px solid #334155' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#f1f5f9' }}>
+                  Leads ({progress.leads?.length || 0})
+                </h3>
+              </div>
+              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 {progress.leads && progress.leads.length > 0 ? (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{
-                      backgroundColor: '#1a2332',
-                      position: 'sticky',
-                      top: 0,
-                      zIndex: 1
-                    }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: '#0f172a', zIndex: 1 }}>
                       <tr>
-                        <th style={{ 
-                          padding: '16px', 
-                          textAlign: 'left', 
-                          borderBottom: '2px solid rgba(255,255,255,0.1)',
-                          color: '#b0b0b0',
-                          fontWeight: '600',
-                          fontSize: '12px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '1px'
-                        }}>
-                          Nome
-                        </th>
-                        <th style={{ 
-                          padding: '16px', 
-                          textAlign: 'left', 
-                          borderBottom: '2px solid rgba(255,255,255,0.1)',
-                          color: '#b0b0b0',
-                          fontWeight: '600',
-                          fontSize: '12px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '1px'
-                        }}>
-                          Telefone
-                        </th>
-                        <th style={{ 
-                          padding: '16px', 
-                          textAlign: 'left', 
-                          borderBottom: '2px solid rgba(255,255,255,0.1)',
-                          color: '#b0b0b0',
-                          fontWeight: '600',
-                          fontSize: '12px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '1px'
-                        }}>
-                          Status
-                        </th>
+                        <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nome</th>
+                        <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Telefone</th>
+                        <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {progress.leads.map((lead, index) => (
-                        <tr key={index} style={{
-                          borderBottom: '1px solid rgba(255,255,255,0.05)',
-                          backgroundColor: lead.status === 'success' ? 'rgba(76, 175, 80, 0.05)' : 
-                                         lead.status === 'error' ? 'rgba(244, 67, 54, 0.05)' : 
-                                         lead.status === 'pending' ? 'rgba(255, 152, 0, 0.05)' : 
-                                         'transparent',
-                          transition: 'background-color 0.3s ease'
-                        }}>
-                          <td style={{ padding: '16px', color: '#e0e0e0', fontWeight: '500' }}>{lead.name}</td>
-                          <td style={{ padding: '16px', color: '#b0b0b0', fontFamily: 'monospace' }}>{lead.phone}</td>
-                          <td style={{ padding: '16px' }}>
-                            <span style={{
-                              display: 'inline-block',
-                              padding: '6px 16px',
-                              borderRadius: '20px',
-                              backgroundColor: getLeadStatusColor(lead.status),
-                              color: 'white',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              boxShadow: `0 2px 8px ${getLeadStatusColor(lead.status)}40`
-                            }}>
-                              {getLeadStatusText(lead.status)}
-                            </span>
-                          </td>
+                      {progress.leads.map((lead, idx) => (
+                        <tr key={idx} style={{ borderTop: '1px solid #334155' }}>
+                          <td style={{ padding: '12px 20px', fontSize: '14px', color: '#cbd5e1' }}>{lead.name}</td>
+                          <td style={{ padding: '12px 20px', fontSize: '14px', color: '#94a3b8', fontFamily: 'monospace' }}>{lead.phone}</td>
+                          <td style={{ padding: '12px 20px' }}>{getLeadStatusBadge(lead.status)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 ) : (
-                  <div style={{ 
-                    padding: '60px', 
-                    textAlign: 'center', 
-                    color: '#616161',
-                    fontSize: '16px'
-                  }}>
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
                     Nenhum lead disponível
                   </div>
                 )}

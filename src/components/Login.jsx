@@ -42,53 +42,49 @@ const Login = ({ onLogin }) => {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      backgroundColor: '#0f1419',
-      backgroundImage: 'linear-gradient(135deg, #0f1419 0%, #1a2332 100%)'
+      backgroundColor: '#0f172a'
     }}>
       <div style={{
-        backgroundColor: '#1a2332',
-        padding: '50px',
-        borderRadius: '16px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        backgroundColor: '#1e293b',
+        border: '1px solid #334155',
+        padding: '40px',
+        borderRadius: '8px',
         width: '100%',
-        maxWidth: '450px',
-        border: '1px solid rgba(255,255,255,0.1)'
+        maxWidth: '420px'
       }}>
-        <div style={{
-          textAlign: 'center',
-          marginBottom: '40px'
-        }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <img 
             src="/fluxione-logo.png" 
             alt="Fluxione Logo" 
             style={{
-              height: '60px',
+              height: '50px',
               width: 'auto',
-              marginBottom: '20px'
+              marginBottom: '16px'
             }}
           />
           <h1 style={{
             margin: 0,
-            color: '#ffffff',
-            fontSize: '28px',
+            color: '#f1f5f9',
+            fontSize: '24px',
             fontWeight: '600'
           }}>
             Painel de Disparo
           </h1>
-          <div style={{
+          <p style={{
             fontSize: '14px',
-            color: '#9e9e9e',
+            color: '#64748b',
             marginTop: '8px'
           }}>
             Sistema de Gestão de Campanhas
-          </div>
+          </p>
         </div>
+        
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
-              marginBottom: '10px',
-              color: '#b0b0b0',
+              marginBottom: '8px',
+              color: '#cbd5e1',
               fontWeight: '500',
               fontSize: '14px'
             }}>
@@ -101,24 +97,22 @@ const Login = ({ onLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '14px',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px',
-                fontSize: '16px',
+                padding: '10px 14px',
+                border: '1px solid #334155',
+                borderRadius: '6px',
+                fontSize: '14px',
                 boxSizing: 'border-box',
-                backgroundColor: '#0f1419',
-                color: '#ffffff',
-                transition: 'all 0.3s ease'
+                backgroundColor: '#0f172a',
+                color: '#e2e8f0'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#00bcd4'}
-              onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
             />
           </div>
-          <div style={{ marginBottom: '24px' }}>
+          
+          <div style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
-              marginBottom: '10px',
-              color: '#b0b0b0',
+              marginBottom: '8px',
+              color: '#cbd5e1',
               fontWeight: '500',
               fontSize: '14px'
             }}>
@@ -131,58 +125,45 @@ const Login = ({ onLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '14px',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px',
-                fontSize: '16px',
+                padding: '10px 14px',
+                border: '1px solid #334155',
+                borderRadius: '6px',
+                fontSize: '14px',
                 boxSizing: 'border-box',
-                backgroundColor: '#0f1419',
-                color: '#ffffff',
-                transition: 'all 0.3s ease'
+                backgroundColor: '#0f172a',
+                color: '#e2e8f0'
               }}
-              onFocus={(e) => e.target.style.borderColor = '#00bcd4'}
-              onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
             />
           </div>
+          
           {error && (
             <div style={{
-              color: '#ff5252',
-              marginBottom: '24px',
-              padding: '14px',
-              backgroundColor: 'rgba(244, 67, 54, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(244, 67, 54, 0.3)',
+              color: '#fca5a5',
+              marginBottom: '20px',
+              padding: '12px',
+              backgroundColor: '#7f1d1d',
+              border: '1px solid #991b1b',
+              borderRadius: '6px',
               fontSize: '14px'
             }}>
               {error}
             </div>
           )}
+          
           <button
             type="submit"
             disabled={loading}
             style={{
               width: '100%',
-              padding: '16px',
-              backgroundColor: '#00bcd4',
+              padding: '12px',
+              backgroundColor: '#1e40af',
               color: 'white',
               border: 'none',
-              borderRadius: '8px',
-              fontSize: '16px',
+              borderRadius: '6px',
+              fontSize: '14px',
               fontWeight: '600',
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1,
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 12px rgba(0, 188, 212, 0.3)'
-            }}
-            onMouseOver={(e) => {
-              if (!loading) {
-                e.target.style.transform = 'translateY(-2px)'
-                e.target.style.boxShadow = '0 6px 16px rgba(0, 188, 212, 0.4)'
-              }
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)'
-              e.target.style.boxShadow = '0 4px 12px rgba(0, 188, 212, 0.3)'
+              opacity: loading ? 0.5 : 1
             }}
           >
             {loading ? 'Entrando...' : 'Entrar'}
